@@ -7,8 +7,66 @@
 
 #include <glib.h>
 #include <string.h>
+#include <cairo.h>
+
+#include <time.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 #define VULKAN_ERROR vulkan_error_quark ()
+//shamelessly borrowed from cairo examples
+
+static void
+draw_clock (cairo_t *cr)
+{
+  time_t t;
+  struct tm *tm;
+  double seconds, minutes, hours;
+
+
+  t = time(NULL);
+  tm = localtime(&t);
+
+
+  seconds = tm->tm_sec * M_PI / 30;
+  minutes = tm->tm_min * M_PI / 30;
+  hours = tm->tm_hour * M_PI / 6;
+
+
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.2);
+  cairo_paint(cr);
+
+
+  cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+  cairo_set_line_width(cr, 0.1);
+
+
+  cairo_set_source_rgb(cr, 0, 0, 0);
+  cairo_translate(cr, 0.5, 0.5);
+  cairo_arc(cr, 0, 0, 0.4, 0, M_PI * 2);
+  cairo_stroke(cr);
+
+  /* seconds */
+  cairo_set_source_rgba(cr, 1, 1, 1, 0.6);
+  cairo_arc(cr, sin(seconds) * 0.4, -cos(seconds) * 0.4,
+            0.05, 0, M_PI * 2);
+  cairo_fill(cr);
+
+  /* minutes */
+  cairo_set_source_rgba(cr, 0.2, 0.2, 1, 0.6);
+  cairo_move_to(cr, 0, 0);
+  cairo_line_to(cr, sin(minutes) * 0.4, -cos(minutes) * 0.4);
+  cairo_stroke(cr);
+
+  /* hours     */
+  cairo_move_to(cr, 0, 0);
+  cairo_line_to(cr, sin(hours) * 0.2, -cos(hours) * 0.2);
+  cairo_stroke(cr);
+}
 
 GQuark
 vulkan_error_quark (void)
@@ -792,6 +850,52 @@ update_uni_data(VkDevice             dev,
   return TRUE;
 }
 
+static void
+vkg_transition_layout(VkCommandBuffer cmd_buf,
+		      VkImage         image,
+		      VkFormat        format,
+		      VkImageLayout   from,
+		      VkImageLayout   to)
+{
+  VkImageMemoryBarrier barrier = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    .oldLayout = from,
+    .newLayout = to,
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image = image,
+    .subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .subresourceRange.baseMipLevel = 0,
+    .subresourceRange.levelCount = 1,
+    .subresourceRange.baseArrayLayer = 0,
+    .subresourceRange.layerCount = 1,
+  };
+
+  if (from == VK_IMAGE_LAYOUT_PREINITIALIZED &&
+      to   == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+
+    barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+  } else if (from == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+	     to   == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+  } else {
+    g_error("Invalid transition of image layouts");
+  }
+
+  vkCmdPipelineBarrier(cmd_buf,
+		       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+		       0,
+		       0, NULL,
+		       0, NULL,
+		       1, &barrier);
+}
+
 /* ************************************************************************ */
 int main(int argc, char **argv)
 {
@@ -1317,6 +1421,256 @@ int main(int argc, char **argv)
 
   g_print("ok \n");
   /* ************************************************************************ */
+  g_print("   o-texture \n");
+
+  size_t tex_size = 1024;
+  int tex_height = tex_size, tex_width = tex_size;
+  int stride = -1;
+  VkDeviceSize tex_mem_size;
+
+  g_print("     o-size: %lu \n", tex_size);
+  stride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, tex_width);
+  tex_mem_size = tex_height * stride;
+
+  g_print("     o-stride: %i \n", stride);
+  g_print("     o-mem size: %lu \n", tex_mem_size);
+
+  VkMemoryRequirements tex_mreq = { };
+
+  VkBufferCreateInfo tex_bci = {
+    .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+    .size  = tex_mem_size,
+    .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+  };
+
+  VkDeviceMemory tex_staging_memory;
+  VkBuffer       tex_staging_buffer;
+
+  res = vkCreateBuffer(dev, &tex_bci, NULL, &tex_staging_buffer);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("staging buffer creation failed");
+      return -1;
+    }
+
+  vkGetBufferMemoryRequirements(dev, tex_staging_buffer, &tex_mreq);
+
+  VkMemoryAllocateInfo tex_ai = {
+    .sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+    .allocationSize = tex_mreq.size,
+  };
+
+  ok = vkg_auto_mem_type_index(&tex_mreq,
+			       dev_mem_props,
+			       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+			       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			       &tex_ai);
+
+  res = vkAllocateMemory(dev, &tex_ai, NULL, &tex_staging_memory);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("staging buffer memory allocation failed");
+      return -1;
+    }
+
+  res = vkBindBufferMemory(dev, tex_staging_buffer, tex_staging_memory, 0);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("staging buffer binding failed");
+      return -1;
+    }
+
+
+  /* initial texture transfer */
+  void *tex_data;
+  res = vkMapMemory(dev, tex_staging_memory, 0, tex_mem_size, 0, &tex_data);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("[E] could not map memory");
+      return -1;
+    }
+
+  cairo_surface_t *tex_surface =
+    cairo_image_surface_create_for_data (tex_data,
+                                         CAIRO_FORMAT_ARGB32,
+                                         tex_width,
+                                         tex_height,
+                                         stride);
+
+  cairo_t *cr = cairo_create (tex_surface);
+
+  cairo_scale(cr, tex_width, tex_height);
+  draw_clock(cr);
+  cairo_destroy(cr);
+  cairo_surface_flush(tex_surface);
+  cairo_surface_destroy(tex_surface);
+
+  vkUnmapMemory(dev, tex_staging_memory);
+
+  VkImage tex_image;
+  VkDeviceMemory tex_image_memory;
+
+  VkImageCreateInfo tex_ici = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .imageType = VK_IMAGE_TYPE_2D,
+    .extent.width = tex_width,
+    .extent.height = tex_height,
+    .extent.depth = 1,
+    .mipLevels = 1,
+    .arrayLayers = 1,
+
+    .format = VK_FORMAT_R8G8B8A8_UNORM,
+    .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+    .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
+    .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+             VK_IMAGE_USAGE_SAMPLED_BIT,
+
+    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .flags = 0,
+  };
+
+  res = vkCreateImage(dev, &tex_ici, NULL, &tex_image);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("tex image creation failed\n");
+      return -1;
+    }
+
+  vkGetImageMemoryRequirements(dev, tex_image, &tex_mreq);
+
+  tex_ai.allocationSize = tex_mreq.size;
+  ok = vkg_auto_mem_type_index(&tex_mreq,
+			       dev_mem_props,
+			       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			       &tex_ai);
+
+  if (!ok)
+    {
+      g_print("Could not find suitable memory\n");
+      return -1;
+    }
+
+  res = vkAllocateMemory(dev, &tex_ai, NULL, &tex_image_memory);
+  if (res != VK_SUCCESS)
+    {
+      g_print("could not allocation memory for texture\n");
+      return -1;
+    }
+
+  vkBindImageMemory(dev, tex_image, tex_image_memory, 0);
+
+  copy_cmd = vkg_command_buffer_get(dev, cp, TRUE, &err);
+  if (copy_cmd == VK_NULL_HANDLE)
+    {
+      g_print("[E] getting buffer: %s", err->message);
+      return -1;
+    }
+
+  VkBufferImageCopy tex_region = {
+    .bufferOffset = 0,
+    /* assume we are tightly packed */
+    .bufferRowLength = 0,
+    .bufferImageHeight = 0,
+
+    .imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+    .imageSubresource.mipLevel = 0,
+    .imageSubresource.baseArrayLayer = 0,
+    .imageSubresource.layerCount = 1,
+
+    .imageOffset = {0, 0, 0},
+    .imageExtent = {tex_width, tex_height, 1},
+  };
+
+  vkg_transition_layout(copy_cmd,
+			tex_image,
+			VK_FORMAT_R8G8B8A8_UNORM,
+			VK_IMAGE_LAYOUT_PREINITIALIZED,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  vkCmdCopyBufferToImage(copy_cmd,
+			 tex_staging_buffer,
+			 tex_image,
+			 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			 1,
+			 &tex_region);
+
+  vkg_transition_layout(copy_cmd,
+			tex_image,
+			VK_FORMAT_R8G8B8A8_UNORM,
+			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  ok = vkg_command_buffer_flush(dev, queue, cp, copy_cmd, &err);
+
+  if (!ok)
+    {
+      g_print("[E] flushing the buffer: %s", err->message);
+      return -1;
+    }
+
+  VkImageViewCreateInfo tex_ci = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+    .pNext                           = NULL,
+    .format                          = VK_FORMAT_R8G8B8A8_UNORM,
+    .components = {
+      VK_COMPONENT_SWIZZLE_R,
+      VK_COMPONENT_SWIZZLE_G,
+      VK_COMPONENT_SWIZZLE_B,
+      VK_COMPONENT_SWIZZLE_A
+    },
+    .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+    .subresourceRange.baseMipLevel   = 0,
+    .subresourceRange.levelCount     = 1,
+    .subresourceRange.baseArrayLayer = 0,
+    .subresourceRange.layerCount     = 1,
+    .viewType                        = VK_IMAGE_VIEW_TYPE_2D,
+    .flags                           = 0,
+    .image                           = tex_image,
+  };
+
+  VkImageView tex_image_view;
+  res = vkCreateImageView(dev, &tex_ci, NULL, &tex_image_view);
+
+  if (res != VK_SUCCESS)
+    {
+      return -1;
+    }
+
+  VkSamplerCreateInfo tex_sci = {
+    .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+    .magFilter = VK_FILTER_LINEAR,
+    .minFilter = VK_FILTER_LINEAR,
+    .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .anisotropyEnable = VK_FALSE,
+    .maxAnisotropy = 1,
+    .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+    .unnormalizedCoordinates = VK_FALSE,
+    .compareEnable = VK_FALSE,
+    .compareOp = VK_COMPARE_OP_ALWAYS,
+    .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+  };
+
+  VkSampler tex_sampler;
+  res = vkCreateSampler(dev, &tex_sci, NULL, &tex_sampler);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("[E] could not create sampler\n");
+      return -1;
+    }
+
+  g_print("     ok \n");
+  /* ************************************************************************ */
   g_print("   o-uniform: ");
   Uni uni;
   uni.size = sizeof(float) * 16 * 3;
@@ -1377,18 +1731,27 @@ int main(int argc, char **argv)
   /* ************************************************************************ */
   g_print("   o-descriptor layout: ");
 
-  VkDescriptorSetLayoutBinding layout_binding = {
-    .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    .descriptorCount = 1,
-    .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-    .pImmutableSamplers = NULL,
+  VkDescriptorSetLayoutBinding layout_binding[] = {
+    {
+      .binding = 0,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+      .pImmutableSamplers = NULL,
+    },{
+      .binding = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .pImmutableSamplers = NULL,
+    }
   };
 
   VkDescriptorSetLayoutCreateInfo layout_desc = {
     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
     .pNext = NULL,
-    .bindingCount = 1,
-    .pBindings = &layout_binding,
+    .bindingCount = 2,
+    .pBindings = layout_binding,
   };
 
   VkDescriptorSetLayout ds_layout;
@@ -1418,18 +1781,22 @@ int main(int argc, char **argv)
   /* ************************************************************************ */
   g_print("   o-descriptor pool: ");
 
-  VkDescriptorPoolSize dps[1] = {
+  VkDescriptorPoolSize dps[] = {
     {
       .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
       .descriptorCount = 1,
-    }
+    },
+    {
+      .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .descriptorCount = 1,
+    },
   };
 
 
   VkDescriptorPoolCreateInfo dsp_ci = {
     .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
     .pNext = NULL,
-    .poolSizeCount = 1,
+    .poolSizeCount = 2,
     .pPoolSizes = dps,
     .maxSets = 1,
   };
@@ -1461,17 +1828,33 @@ int main(int argc, char **argv)
       return -1;
     }
 
-  VkWriteDescriptorSet wds = {
-    // binding 0, the uniform
-    .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-    .dstSet          = desc_set,
-    .descriptorCount = 1,
-    .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-    .pBufferInfo     = &uni.descriptor,
-    .dstBinding      = 0, // binding point
+  VkWriteDescriptorSet wds[] = {
+    {
+      // binding 0, the uniform
+      .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet          = desc_set,
+      .descriptorCount = 1,
+      .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .pBufferInfo     = &uni.descriptor,
+      .dstBinding      = 0, // binding point
+    },
+    {
+      .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet          = desc_set,
+      .descriptorCount = 1,
+      .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+      .dstBinding      = 1,
+
+      .dstArrayElement = 0,
+      .pImageInfo      = &(VkDescriptorImageInfo) {
+	.imageLayout       = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView         = tex_image_view,
+	.sampler           = tex_sampler,
+      },
+    }
   };
 
-  vkUpdateDescriptorSets(dev, 1, &wds, 0, NULL);
+  vkUpdateDescriptorSets(dev, 2, wds, 0, NULL);
 
   g_print("ok \n");
   /* ************************************************************************ */
@@ -1824,6 +2207,13 @@ int main(int argc, char **argv)
   vkDestroyPipeline(dev, pipeline, NULL);
   vkDestroyPipelineLayout(dev, pipeline_layout, NULL);
   vkDestroyPipelineCache(dev, pipeline_cache, NULL);
+
+  vkDestroySampler(dev, tex_sampler, NULL);
+  vkDestroyImageView(dev, tex_image_view, NULL);
+  vkDestroyImage(dev, tex_image, NULL);
+  vkFreeMemory(dev, tex_image_memory, NULL);
+  vkDestroyBuffer(dev, tex_staging_buffer, NULL);
+  vkFreeMemory(dev, tex_staging_memory, NULL);
 
   vkDestroyBuffer(dev, vertex_area.device_buffer, NULL);
   vkFreeMemory(dev, vertex_area.device_memory, NULL);
