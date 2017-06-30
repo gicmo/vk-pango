@@ -883,6 +883,12 @@ vkg_transition_layout(VkCommandBuffer cmd_buf,
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
+  } else if (from ==  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+	     to   == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+
+    barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
   } else {
     g_error("Invalid transition of image layouts");
   }
@@ -896,6 +902,42 @@ vkg_transition_layout(VkCommandBuffer cmd_buf,
 		       1, &barrier);
 }
 
+static gboolean
+update_texture_with_clock(VkDevice dev,
+			  VkDeviceMemory  mem,
+			  VkDeviceSize    mem_size,
+			  int width,
+			  int height,
+			  int stride)
+{
+  void *data;
+  VkResult  res = vkMapMemory(dev, mem, 0, mem_size, 0, &data);
+
+  if (res != VK_SUCCESS)
+    {
+      g_print("[E] could not map memory");
+      return FALSE;
+    }
+
+  cairo_surface_t *tex_surface =
+    cairo_image_surface_create_for_data(data,
+                                        CAIRO_FORMAT_ARGB32,
+                                        width,
+                                        height,
+                                        stride);
+
+  cairo_t *cr = cairo_create (tex_surface);
+
+  cairo_scale(cr, width, height);
+  draw_clock(cr);
+  cairo_destroy(cr);
+  cairo_surface_flush(tex_surface);
+  cairo_surface_destroy(tex_surface);
+
+  vkUnmapMemory(dev, mem);
+
+  return TRUE;
+}
 /* ************************************************************************ */
 int main(int argc, char **argv)
 {
@@ -1486,32 +1528,17 @@ int main(int argc, char **argv)
 
 
   /* initial texture transfer */
-  void *tex_data;
-  res = vkMapMemory(dev, tex_staging_memory, 0, tex_mem_size, 0, &tex_data);
+  ok = update_texture_with_clock(dev,
+				 tex_staging_memory,
+				 tex_mem_size,
+				 tex_width, tex_height,
+				 stride);
 
-  if (res != VK_SUCCESS)
+  if (!ok)
     {
-      g_print("[E] could not map memory");
+      g_print("could not draw to the clock");
       return -1;
     }
-
-  cairo_surface_t *tex_surface =
-    cairo_image_surface_create_for_data (tex_data,
-                                         CAIRO_FORMAT_ARGB32,
-                                         tex_width,
-                                         tex_height,
-                                         stride);
-
-  cairo_t *cr = cairo_create (tex_surface);
-
-  cairo_scale(cr, tex_width, tex_height);
-  draw_clock(cr);
-  cairo_destroy(cr);
-  cairo_surface_flush(tex_surface);
-  cairo_surface_destroy(tex_surface);
-
-  vkUnmapMemory(dev, tex_staging_memory);
-
   VkImage tex_image;
   VkDeviceMemory tex_image_memory;
 
@@ -2058,6 +2085,26 @@ int main(int argc, char **argv)
           return -1;
         }
 
+      vkg_transition_layout(cmd_buf[i],
+			    tex_image,
+			    VK_FORMAT_R8G8B8A8_UNORM,
+			    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+      vkCmdCopyBufferToImage(cmd_buf[i],
+			     tex_staging_buffer,
+			     tex_image,
+			     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			     1,
+			     &tex_region);
+
+      vkg_transition_layout(cmd_buf[i],
+			    tex_image,
+			    VK_FORMAT_R8G8B8A8_UNORM,
+			    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+
       vkCmdBeginRenderPass(cmd_buf[i], &rpbi, VK_SUBPASS_CONTENTS_INLINE);
 
       VkViewport viewport = {
@@ -2199,6 +2246,16 @@ int main(int argc, char **argv)
         }
 
       vkDeviceWaitIdle(dev);
+
+      ok = update_texture_with_clock(dev,
+				     tex_staging_memory,
+				     tex_mem_size,
+				     tex_width, tex_height,
+				     stride);
+      if (!ok)
+	{
+	  g_print("[W] could not update the clock\n");
+	}
   }
 
   vkDeviceWaitIdle(dev);
