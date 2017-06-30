@@ -36,10 +36,11 @@ draw_clock (cairo_t *cr)
   minutes = tm->tm_min * M_PI / 30;
   hours = tm->tm_hour * M_PI / 6;
 
-
-  cairo_set_source_rgba(cr, 1, 1, 1, 0.2);
+  cairo_save(cr);
+  cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
+  cairo_set_source_rgba(cr, 1., 1., 1., 0.0);
   cairo_paint(cr);
-
+  cairo_restore (cr);
 
   cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
   cairo_set_line_width(cr, 0.1);
