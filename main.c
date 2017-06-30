@@ -46,7 +46,7 @@ draw_clock (cairo_t *cr)
   cairo_set_line_width(cr, 0.1);
 
 
-  cairo_set_source_rgb(cr, 0, 0, 0);
+  cairo_set_source_rgba(cr, .5, .5, .5, .8);
   cairo_translate(cr, 0.5, 0.5);
   cairo_arc(cr, 0, 0, 0.4, 0, M_PI * 2);
   cairo_stroke(cr);
@@ -1674,18 +1674,18 @@ int main(int argc, char **argv)
 
   VkSamplerCreateInfo tex_sci = {
     .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-    .magFilter = VK_FILTER_LINEAR,
-    .minFilter = VK_FILTER_LINEAR,
-    .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-    .anisotropyEnable = VK_FALSE,
-    .maxAnisotropy = 1,
+    .magFilter               = VK_FILTER_LINEAR,
+    .minFilter               = VK_FILTER_LINEAR,
+    .addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .anisotropyEnable        = VK_FALSE,
+    .maxAnisotropy           = 1,
     .borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
     .unnormalizedCoordinates = VK_FALSE,
-    .compareEnable = VK_FALSE,
-    .compareOp = VK_COMPARE_OP_ALWAYS,
-    .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+    .compareEnable           = VK_FALSE,
+    .compareOp               = VK_COMPARE_OP_ALWAYS,
+    .mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
   };
 
   VkSampler tex_sampler;
@@ -1911,13 +1911,21 @@ int main(int argc, char **argv)
     .attachmentCount = 1,
     .pAttachments    = (VkPipelineColorBlendAttachmentState[]) {
       {
-	.colorWriteMask = 0xf,
-	.blendEnable    = VK_FALSE,
+	.colorWriteMask = VK_COLOR_COMPONENT_R_BIT |
+	VK_COLOR_COMPONENT_G_BIT |
+	VK_COLOR_COMPONENT_B_BIT |
+	VK_COLOR_COMPONENT_A_BIT,
+	.blendEnable    = VK_TRUE,
+	.colorBlendOp = VK_BLEND_OP_ADD,
+	.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+	.dstColorBlendFactor = VK_BLEND_FACTOR_ONE,
 	.alphaBlendOp   = VK_BLEND_OP_ADD,
+	.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+	.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
       },
     },
     .logicOpEnable   = VK_FALSE,
-    .blendConstants  = { 0.0f, 0.0f, 0.0f, 0.0f },
+    .blendConstants  = { 1.0f, 1.0f, 1.0f, 1.0f },
   };
 
   VkPipelineViewportStateCreateInfo vps_ci = {
