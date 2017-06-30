@@ -883,10 +883,10 @@ vkg_transition_layout(VkCommandBuffer cmd_buf,
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-  } else if (from ==  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
+  } else if (from == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL &&
 	     to   == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
 
-    barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
     barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
 
   } else {
@@ -911,7 +911,7 @@ update_texture_with_clock(VkDevice dev,
 			  int stride)
 {
   void *data;
-  VkResult  res = vkMapMemory(dev, mem, 0, mem_size, 0, &data);
+  VkResult res = vkMapMemory(dev, mem, 0, mem_size, 0, &data);
 
   if (res != VK_SUCCESS)
     {
@@ -926,15 +926,15 @@ update_texture_with_clock(VkDevice dev,
                                         height,
                                         stride);
 
-  cairo_t *cr = cairo_create (tex_surface);
+  cairo_t *cr = cairo_create(tex_surface);
 
   cairo_scale(cr, width, height);
   draw_clock(cr);
   cairo_destroy(cr);
   cairo_surface_flush(tex_surface);
-  cairo_surface_destroy(tex_surface);
-
   vkUnmapMemory(dev, mem);
+
+  cairo_surface_destroy(tex_surface);
 
   return TRUE;
 }
@@ -1551,7 +1551,7 @@ int main(int argc, char **argv)
     .mipLevels = 1,
     .arrayLayers = 1,
 
-    .format = VK_FORMAT_R8G8B8A8_UNORM,
+    .format = VK_FORMAT_B8G8R8A8_UNORM,
     .tiling = VK_IMAGE_TILING_OPTIMAL,
 
     .initialLayout = VK_IMAGE_LAYOUT_PREINITIALIZED,
@@ -1646,12 +1646,12 @@ int main(int argc, char **argv)
   VkImageViewCreateInfo tex_ci = {
     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
     .pNext                           = NULL,
-    .format                          = VK_FORMAT_R8G8B8A8_UNORM,
+    .format                          = VK_FORMAT_B8G8R8A8_UNORM,
     .components = {
-      VK_COMPONENT_SWIZZLE_R,
-      VK_COMPONENT_SWIZZLE_G,
-      VK_COMPONENT_SWIZZLE_B,
-      VK_COMPONENT_SWIZZLE_A
+      VK_COMPONENT_SWIZZLE_IDENTITY,
+      VK_COMPONENT_SWIZZLE_IDENTITY,
+      VK_COMPONENT_SWIZZLE_IDENTITY,
+      VK_COMPONENT_SWIZZLE_IDENTITY
     },
     .subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
     .subresourceRange.baseMipLevel   = 0,
@@ -2087,7 +2087,7 @@ int main(int argc, char **argv)
 
       vkg_transition_layout(cmd_buf[i],
 			    tex_image,
-			    VK_FORMAT_R8G8B8A8_UNORM,
+			    VK_FORMAT_B8G8R8A8_UNORM,
 			    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
@@ -2100,7 +2100,7 @@ int main(int argc, char **argv)
 
       vkg_transition_layout(cmd_buf[i],
 			    tex_image,
-			    VK_FORMAT_R8G8B8A8_UNORM,
+			    VK_FORMAT_B8G8R8A8_UNORM,
 			    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
