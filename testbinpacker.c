@@ -69,6 +69,12 @@ test_rect_basic (Fixture       *fixture,
   g_assert_cmpuint(g_rect_area(&a), ==, sum);
 }
 
+typedef struct GlyphInfo {
+  PangoGlyph      glyph;
+  PangoFont      *font;
+  PangoRectangle  ink;
+} GlyphInfo;
+
 static void
 test_font_basic (Fixture       *fixture,
 		 gconstpointer  user_data)
@@ -81,9 +87,6 @@ test_font_basic (Fixture       *fixture,
   PangoFontDescription *desc;
   cairo_status_t status;
   PangoRectangle pr = {0, };
-  PangoLayoutLine *line;
-  PangoGlyphItem *gi;
-  PangoFont *font;
   PangoContext *context;
   PangoFontMap *fontmap;
   GGuillotinePacker *packer;
@@ -112,7 +115,7 @@ test_font_basic (Fixture       *fixture,
   context = pango_cairo_create_context(cr);
   fontmap = pango_context_get_font_map(context);
 
-  font = pango_font_map_load_font(fontmap, context, desc);
+  //  font = pango_font_map_load_font(fontmap, context, desc);
 
   layout = pango_layout_new(context);
 
@@ -122,9 +125,11 @@ test_font_basic (Fixture       *fixture,
                         "aBcDeFgHiJkLmNoPqRsTuVwXyZ"
                         "ÄäÖöÜüß"
                         "ŁĄŻĘĆŃŚŹ"
-                        //                        "ЯБГДЖЙ"
+                        "ЯБГДЖЙ"
+                        "ろぬふあうええおやゆよわほへたていすかんなにらぜ゜むちとしはきくまのりれけむつさそひこみもねるめ"
                         "¥£€$¢₡₢₣₤₥₦₧₨₩₪₫₭₮₯₹"
-                        "0123456789+*[]{}!\"#$%&'()~=",
+                        "0123456789+*[]{}!\"#$%&'()~="
+                        ,
                         -1);
 
   pango_layout_get_pixel_extents(layout, &pr, NULL);
@@ -134,35 +139,46 @@ test_font_basic (Fixture       *fixture,
 
   //pango_cairo_show_layout (cr, layout);
 
-  line = pango_layout_get_line_readonly(layout, 0);
-  g_assert_nonnull(line);
-  g_assert_nonnull(line->runs);
+  bins = g_array_sized_new(FALSE, FALSE, sizeof(GRect), 10);
 
-  gi = (PangoGlyphItem *) line->runs->data;
-  g_print(" glyphs: %d\n", gi->glyphs->num_glyphs);
+  PangoLayoutIter *li = pango_layout_get_iter(layout);
 
-  bins = g_array_sized_new(FALSE, FALSE, sizeof(GRect), gi->glyphs->num_glyphs);
-  for (i = 0; i < gi->glyphs->num_glyphs; i++)
-    {
-      PangoGlyphInfo *glyph_info = gi->glyphs->glyphs + i;
-      PangoGlyph glyph = glyph_info->glyph;
-      PangoRectangle ink_rect;
-      GRect gr = {0, };
+  do {
+    const PangoLayoutRun *run = pango_layout_iter_get_run_readonly(li);
+    const PangoGlyphItem *gi = (PangoGlyphItem *) run;
 
-      pango_font_get_glyph_extents(font, glyph, &ink_rect, NULL);
-      pango_extents_to_pixels(&ink_rect, NULL);
+    if (!run)
+      continue;
 
-      g_print("  %u: %d, %d, %d, %d\n",
-              glyph,
-              ink_rect.x, ink_rect.y,
-              ink_rect.width, ink_rect.height);
+    for (i = 0; i < gi->glyphs->num_glyphs; i++)
+      {
+        PangoGlyphInfo *glyph_info = gi->glyphs->glyphs + i;
+        PangoGlyph glyph = glyph_info->glyph;
+        PangoFont *font = gi->item->analysis.font;
+        GlyphInfo *info;
+        GRect gr;
 
-      gr.height = ink_rect.height + 1;
-      gr.width = ink_rect.width + 1;
-      gr.id = GUINT_TO_POINTER(glyph);
 
-      g_array_append_val(bins, gr);
-    }
+        info = g_slice_new(GlyphInfo);
+        info->glyph = glyph;
+        info->font = font;
+
+        pango_font_get_glyph_extents(font, glyph, &info->ink, NULL);
+        pango_extents_to_pixels(&info->ink, NULL);
+
+        gr.height = info->ink.height + 1;
+        gr.width = info->ink.width + 1;
+        gr.id = info;
+
+        g_print("  %u: %d, %d | %d, %d, %d, %d\n",
+                glyph,
+                gr.height, gr.width,
+                info->ink.x, info->ink.y,
+                info->ink.height, info->ink.width);
+
+        g_array_append_val(bins, gr);
+      }
+  } while (pango_layout_iter_next_run(li));
 
   packed = g_guillotine_packer_insert(packer, bins);
   g_print("Packing done [%d]\n", packed->len);
@@ -170,10 +186,6 @@ test_font_basic (Fixture       *fixture,
   g_object_get(packer,
                "free-rects", &rfree,
                NULL);
-
-
-  scaled_font = pango_cairo_font_get_scaled_font(PANGO_CAIRO_FONT (font));
-  cairo_set_scaled_font(cr, scaled_font);
 
   for (i = 0; i < rfree->len; i++)
     {
@@ -191,24 +203,26 @@ test_font_basic (Fixture       *fixture,
       cairo_fill(cr);
     }
 
-  g_print("glyphs (packed): \n");
+
+  g_print("glyphs (packed) [%u]: \n", packed->len);
 
   for (i = 0; i < packed->len; i++)
     {
       GRect *gr = &g_array_index(packed, GRect, i);
-      PangoGlyph glyph = GPOINTER_TO_UINT(gr->id);
+      GlyphInfo *info = gr->id;
+      PangoGlyph glyph = info->glyph;
       cairo_glyph_t cairo_glyph;
-      PangoRectangle ink_rect;
-
-      pango_font_get_glyph_extents(font, glyph, &ink_rect, NULL);
-      pango_extents_to_pixels(&ink_rect, NULL);
 
       cairo_glyph.index = glyph;
-      cairo_glyph.x = (int) gr->x - ink_rect.x;
-      cairo_glyph.y = (int) gr->y - ink_rect.y;
+      cairo_glyph.x = (int) gr->x - info->ink.x;
+      cairo_glyph.y = (int) gr->y - info->ink.y;
 
+      cairo_save(cr);
       cairo_set_source_rgb(cr, 0.0, 0.0, 0.0);
+      scaled_font = pango_cairo_font_get_scaled_font(PANGO_CAIRO_FONT(info->font));
+      cairo_set_scaled_font(cr, scaled_font);
       cairo_show_glyphs(cr, &cairo_glyph, 1);
+      cairo_restore (cr);
 
       g_print("  %u: %d, %d, %d, %d @ %f, %f [%d, %d]\n",
               glyph,
@@ -218,15 +232,14 @@ test_font_basic (Fixture       *fixture,
               gr->height,
               cairo_glyph.x,
               cairo_glyph.y,
-              ink_rect.x,
-              ink_rect.y);
+              info->ink.x,
+              info->ink.y);
 
       cairo_set_line_width(cr, 1);
       cairo_set_source_rgba(cr, 1.0, 0.0, 0.0, 0.1);
       cairo_rectangle(cr, gr->x, gr->y, gr->width, gr->height);
       cairo_stroke_preserve(cr);
       cairo_fill(cr);
-
     }
 
   cairo_destroy(cr);
