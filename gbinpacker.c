@@ -448,7 +448,7 @@ g_guillotine_packer_insert(GGuillotinePacker *gp,
 		  idx = k;
 		  score = G_MININT;
 
-		  i = gp->rects_free->len;
+		  i = gp->rects_free->len - 1;
 		}
 	      else if (g_rect_can_fit(f, b))
 		{
