@@ -100,8 +100,15 @@ GArray *  g_guillotine_packer_insert   (GGuillotinePacker *gp,
 gboolean  g_guillotine_packer_pack     (GGuillotinePacker *gp,
 					const GRect       *r);
 GArray *  g_guillotine_packer_check    (GGuillotinePacker *gp);
+
 /* ************************************************************************** */
 
+#define G_TYPE_SKYLINE_PACKER g_skyline_packer_get_type()
+G_DECLARE_FINAL_TYPE(GSkylinePacker, g_skyline_packer, G, SKYLINE_PACKER, GBinPacker);
+
+GArray *  g_skyline_packer_insert     (GSkylinePacker *sp,
+                                       GArray         *bins);
+/* ************************************************************************** */
 G_END_DECLS
 
 #endif /* __G_BIN_PACKER_H__ */

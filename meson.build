@@ -5,13 +5,13 @@ compiler = meson.get_compiler('c')
 cairo    = dependency('cairo')
 glib     = dependency('glib-2.0')
 graphene = dependency('graphene-1.0')
-vulkan   = dependency('vulkan')
+#vulkan   = dependency('vulkan')
 glfw3    = dependency('glfw3')
 pango    = dependency('pango')
 pc       = dependency('pangocairo')
-gtk4     = dependency('gtk+-4.0')
+#gtk4     = dependency('gtk+-4.0')
 
-alldep = [cairo, glib, gtk4, glfw3, graphene, pango, pc, vulkan]
+alldep = [cairo, glib, glfw3, graphene, pango, pc]
 
 c_flags   = ['-Wall', '-Wunreachable-code']
 ld_flags  = []
@@ -56,18 +56,18 @@ foreach t: tests
              dependencies: [cairo, glib, pango, pc])
 endforeach
 
-executable('vkpg',
-	   sources: [['main.c',
-		      'gbinpacker.h', 'gbinpacker.c'],
-		     compiled_shaders],
-	   cpp_args: c_flags,
-	   link_args: ld_flags,
-	   dependencies: alldep)
+# executable('vkpg',
+# 	   sources: [['main.c',
+# 		      'gbinpacker.h', 'gbinpacker.c'],
+# 		     compiled_shaders],
+# 	   cpp_args: c_flags,
+# 	   link_args: ld_flags,
+# 	   dependencies: alldep)
 
-executable('gvkpg',
-	   sources: [['win.c',
-		      'gbinpacker.h', 'gbinpacker.c'],
-		     compiled_shaders],
-	   cpp_args: c_flags,
-	   link_args: ld_flags,
-	   dependencies: alldep)
+# executable('gvkpg',
+# 	   sources: [['win.c',
+# 		      'gbinpacker.h', 'gbinpacker.c'],
+# 		     compiled_shaders],
+# 	   cpp_args: c_flags,
+# 	   link_args: ld_flags,
+# 	   dependencies: alldep)

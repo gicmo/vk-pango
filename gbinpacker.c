@@ -689,7 +689,6 @@ g_guillotine_packer_insert(GGuillotinePacker *gp,
   return out;
 }
 
-
 GArray *
 g_guillotine_packer_check(GGuillotinePacker *gp)
 {
@@ -728,4 +727,377 @@ g_guillotine_packer_check(GGuillotinePacker *gp)
     }
 
   return bad;
+}
+
+/* ************************************************************************** */
+
+struct _GSkylinePacker {
+  GBinPacker         parent;
+
+  GArray            *skyline;
+
+  gboolean           use_wm;
+  GGuillotinePacker *wastemap;
+};
+
+enum {
+  PROP_SP_0,
+  PROP_SP_SKYLINE,
+  PROP_SP_USE_WASTEMAP,
+  PROP_SP_LAST
+};
+static GParamSpec *sp_props[PROP_SP_LAST] = { NULL, };
+
+G_DEFINE_TYPE(GSkylinePacker, g_skyline_packer, G_TYPE_BIN_PACKER);
+
+static void
+g_skyline_packer_finalize(GObject *obj)
+{
+  GSkylinePacker *sp = G_SKYLINE_PACKER(obj);
+
+  g_array_free(sp->skyline, TRUE);
+  g_clear_pointer(&sp->wastemap, g_object_unref);
+
+  G_OBJECT_CLASS(g_skyline_packer_parent_class)->finalize(obj);
+}
+
+static void
+g_skyline_packer_get_property(GObject    *object,
+                                 guint       prop_id,
+                                 GValue     *value,
+                                 GParamSpec *pspec)
+{
+  GSkylinePacker *sp = G_SKYLINE_PACKER(object);
+
+  switch (prop_id) {
+  case PROP_SP_SKYLINE:
+    g_value_set_boxed(value, sp->skyline);
+    break;
+
+  case PROP_SP_USE_WASTEMAP:
+    g_value_set_boolean(value, sp->wastemap != NULL);
+    break;
+  }
+}
+
+
+static void
+g_skyline_packer_set_property(GObject      *object,
+                                 guint         prop_id,
+                                 const GValue *value,
+                                 GParamSpec   *pspec)
+{
+  GSkylinePacker *sp = G_SKYLINE_PACKER(object);
+
+  switch (prop_id) {
+  case PROP_SP_USE_WASTEMAP:
+     sp->use_wm = g_value_get_boolean(value);
+    break;
+  }
+
+}
+
+
+static void
+g_skyline_packer_constructed(GObject *obj)
+{
+  GSkylinePacker *sp = G_SKYLINE_PACKER(obj);
+  GBinPackerPrivate *priv = BP_GET_PRIV(sp);
+  GRect *r;
+
+  G_OBJECT_CLASS(g_skyline_packer_parent_class)->constructed(obj);
+
+  sp->skyline->len = 1;
+
+  r = &g_array_index(sp->skyline, GRect, 0);
+  r->x = r->y = 0;
+
+  r->width  = priv->width;
+  r->height = 0; //not actually needed
+}
+
+static void
+g_skyline_packer_init(GSkylinePacker *sp)
+{
+  sp->skyline = g_array_sized_new(FALSE, FALSE, sizeof(GRect), 1);
+}
+
+static void
+g_skyline_packer_class_init(GSkylinePackerClass *klass)
+{
+  GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
+
+  gobject_class->finalize     = g_skyline_packer_finalize;
+  gobject_class->get_property = g_skyline_packer_get_property;
+  gobject_class->set_property = g_skyline_packer_set_property;
+  gobject_class->constructed  = g_skyline_packer_constructed;
+
+  sp_props[PROP_SP_SKYLINE] =
+    g_param_spec_boxed("skyline",
+                       NULL, NULL,
+                       G_TYPE_ARRAY,
+                       G_PARAM_READABLE |
+                       G_PARAM_STATIC_NICK);
+
+  sp_props[PROP_SP_USE_WASTEMAP] =
+    g_param_spec_boolean("use-wastemap",
+                         NULL, NULL, TRUE,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_NICK);
+
+  g_object_class_install_properties(gobject_class,
+                                    PROP_SP_LAST,
+                                    sp_props);
+}
+
+typedef enum GSkylinePackerLevel {
+  GSP_LEVEL_BOTTOM_LEFT,
+  GSP_LEVEL_MIN_WASTE,
+} GSkylinePackerLevel;
+
+static gboolean
+skyline_fit_rect_at(GSkylinePacker *sp,
+                    const GRect     *r,
+                    guint           index,
+                    guint           *y_out)
+{
+  GBinPackerPrivate *base = BP_GET_PRIV(sp);
+  GRect *n = &g_array_index(sp->skyline, GRect, index);
+  int space;
+  guint y;
+
+  if (n->x + r->width > base->width)
+    return FALSE;
+
+  space = r->width;
+  y = n->y;
+
+  while (space > 0)
+    {
+      y = MAX(y, n->y);
+
+      if (y + r->height > base->height)
+        return FALSE;
+
+      space -= n->width;
+      index++;
+
+      g_assert(index < sp->skyline->len || space <= 0);
+      n = &g_array_index(sp->skyline, GRect, index);
+    }
+
+  *y_out = y;
+  return TRUE;
+}
+
+#if 0
+static int
+skyline_compute_waste(GSkylinePacker *sp,
+                      guint   index,
+                      GRect  *r)
+{
+  int waste = 0;
+  GRect *n = &g_array_index(sp->skyline, GRect, index);
+  const int left = n->x;
+  const int right = left + r->width;
+
+  while (index < sp->skyline->len && n->x < right)
+    {
+      const int ls = n->x;
+      const int rs = MIN(right, ls + n->width);
+
+      if (ls >= right || n->x + n->width <= left)
+        break;
+
+
+      waste += (rs - ls) * (r->y - n->y);
+
+      index++;
+      n = &g_array_index(sp->skyline, GRect, index);
+    }
+
+  return waste;
+}
+
+
+static gboolean
+skyline_fit_rect_at_waste(GSkylinePacker *sp,
+                          guint   index,
+                          GRect  *r,
+                          int    *waste)
+{
+  if (! skyline_fit_rectangle(sp, index, r))
+    return FALSE;
+
+  *waste = skyline_compute_waste(sp, index, r);
+  return TRUE;
+}
+
+#endif
+
+typedef struct Score {
+
+  guint first;
+  guint second;
+
+} Score;
+
+static gboolean
+score_check_and_update(Score *score,
+                       guint  first,
+                       guint  second)
+{
+  if (!(first < score->first ||
+        (first == score->first && second < score->second)))
+    return FALSE;
+
+  score->first = first;
+  score->second = second;
+
+  return TRUE;
+}
+
+static gboolean
+position_node_bl(GSkylinePacker *sp,
+                 GRect          *r,
+                 guint          *index,
+                 Score          *score)
+{
+  guint i;
+  gboolean have_fit = FALSE;
+
+  score->first = G_MAXUINT;
+  score->second = G_MAXUINT;
+
+  for (i = 0; i < sp->skyline->len; i++)
+    {
+      GRect *n = &g_array_index(sp->skyline, GRect, i);
+      guint top;
+      guint y;
+
+      if (! skyline_fit_rect_at(sp, r, i, &y))
+        continue;
+
+      top = y + r->height;
+
+      if (!score_check_and_update(score, top, n->width))
+        continue;
+
+      r->x = n->x;
+      r->y = y;
+
+      *index = i;
+      have_fit = TRUE;
+    }
+
+  return have_fit;
+}
+
+static void
+skyline_add_level(GSkylinePacker *sp,
+                  const GRect    *r,
+                  guint           pos)
+{
+  GBinPackerPrivate *base = BP_GET_PRIV(sp);
+  GRect a;
+  guint i;
+
+  a.x = r->x;
+  a.y = r->y + r->height;
+  a.width = r->width;
+
+  g_array_insert_val(sp->skyline, pos, a);
+
+  g_assert(a.x + a.width <= base->width);
+  g_assert(a.y <= base->height);
+
+  for (i = pos + 1; i < sp->skyline->len; i++)
+    {
+      GRect *n = &g_array_index(sp->skyline, GRect, i);
+      GRect *b = &g_array_index(sp->skyline, GRect, i - 1);
+      int width = n->width;
+      int shrink;
+
+      g_assert(b->x <= n->x);
+
+      if (!(n->x < b->x + b->width))
+        break;
+
+      shrink = ((int) b->x + b->width) - n->x;
+
+      n->x += shrink;
+      width -= shrink;
+
+      if (width > 0)
+        {
+          n->width = width;
+          break;
+        }
+
+      g_array_remove_index(sp->skyline, i);
+      i--;
+    }
+
+  /*  */
+  if (sp->skyline->len == 0)
+    return; /* avoid overflow in case of len == 0 below */
+
+  for (i = 0; i < sp->skyline->len - 1; i++)
+    {
+      GRect *n = &g_array_index(sp->skyline, GRect, i);
+      GRect *b = &g_array_index(sp->skyline, GRect, i + 1);
+
+      if (n->y != b->y)
+        continue;
+
+      n->width += b->width;
+      g_array_remove_index(sp->skyline, i + 1);
+      i--;
+    }
+}
+
+GArray *
+g_skyline_packer_insert(GSkylinePacker *sp,
+                        GArray         *bins)
+{
+  GBinPackerPrivate *base = BP_GET_PRIV(sp);
+  GArray *out = g_array_sized_new(FALSE, FALSE, sizeof(GRect), bins->len);
+
+  while (bins->len > 0)
+    {
+      gboolean have_fit = FALSE;
+      Score score = {G_MAXUINT, G_MAXUINT};
+      GRect best;
+      guint best_skyline;
+      guint best_bin;
+      guint i;
+
+      for (i = 0; i < bins->len; i++)
+        {
+          GRect t = g_array_index(bins, GRect, i);
+          Score s;
+          guint idx;
+
+          if (!position_node_bl(sp, &t, &idx, &s) ||
+              !score_check_and_update(&score, s.first, s.second))
+              continue;
+
+          best = t;
+          best_skyline = idx;
+          best_bin = i;
+          have_fit = TRUE;
+        }
+
+      if (!have_fit)
+        break;
+
+      skyline_add_level(sp, &best, best_skyline);
+
+      g_array_append_val(base->rects, best);
+      g_array_append_val(out, best);
+      g_array_remove_index_fast(bins, best_bin);
+    }
+
+  return out;
 }
