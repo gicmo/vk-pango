@@ -34,6 +34,11 @@ guint            g_rect_area         (const GRect *rect);
 gboolean         g_rect_intersect    (const GRect *a,
 				      const GRect *b,
 				      GRect       *intersection);
+
+gboolean         g_rect_merge        (const GRect *a,
+				      const GRect *b,
+				      GRect       *intersection);
+
 typedef enum _GRectSplit {
 
   G_RECT_SPLIT_AREA_MAX,

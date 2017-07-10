@@ -343,11 +343,14 @@ struct _GGuillotinePacker {
 
   GRectFit   fit_method;
   GRectSplit split_method;
+  gboolean   merge_free;
+
 };
 
 enum {
   PROP_GP_0,
   PROP_GP_FREE_RECTS,
+  PROP_GP_MERGE_FREE,
   PROP_GP_LAST
 };
 static GParamSpec *gp_props[PROP_GP_LAST] = { NULL, };
@@ -366,9 +369,9 @@ g_guillotine_packer_finalize(GObject *obj)
 
 static void
 g_guillotine_packer_get_property(GObject    *object,
-                         guint       prop_id,
-                         GValue     *value,
-                         GParamSpec *pspec)
+                                 guint       prop_id,
+                                 GValue     *value,
+                                 GParamSpec *pspec)
 {
   GGuillotinePacker *gp = G_GUILLOTINE_PACKER(object);
 
@@ -376,8 +379,29 @@ g_guillotine_packer_get_property(GObject    *object,
   case PROP_GP_FREE_RECTS:
     g_value_set_boxed(value, gp->rects_free);
     break;
+
+  case PROP_GP_MERGE_FREE:
+    g_value_set_boolean(value, gp->merge_free);
+    break;
   }
 }
+
+
+static void
+g_guillotine_packer_set_property(GObject      *object,
+                                 guint         prop_id,
+                                 const GValue *value,
+                                 GParamSpec   *pspec)
+{
+  GGuillotinePacker *gp = G_GUILLOTINE_PACKER(object);
+
+  switch (prop_id) {
+  case PROP_GP_MERGE_FREE:
+     gp->merge_free = g_value_get_boolean(value);
+    break;
+  }
+}
+
 
 static void
 g_guillotine_packer_constructed(GObject *obj)
@@ -402,9 +426,7 @@ g_guillotine_packer_init(GGuillotinePacker *gp)
 {
   GBinPackerPrivate *priv = BP_GET_PRIV(gp);
 
-
   gp->rects_free = g_array_sized_new(FALSE, FALSE, sizeof(GRect), 1);
-
 
   /* TODO: make this a property  */
   gp->split_method = G_RECT_SPLIT_AREA_MAX;
@@ -418,6 +440,7 @@ g_guillotine_packer_class_init(GGuillotinePackerClass *klass)
 
   gobject_class->finalize     = g_guillotine_packer_finalize;
   gobject_class->get_property = g_guillotine_packer_get_property;
+  gobject_class->set_property = g_guillotine_packer_set_property;
   gobject_class->constructed  = g_guillotine_packer_constructed;
 
   gp_props[PROP_GP_FREE_RECTS] =
@@ -427,9 +450,43 @@ g_guillotine_packer_class_init(GGuillotinePackerClass *klass)
                        G_PARAM_READABLE |
                        G_PARAM_STATIC_NICK);
 
+  gp_props[PROP_GP_MERGE_FREE] =
+    g_param_spec_boolean("merge-free", NULL, NULL, TRUE,
+                         G_PARAM_READWRITE |
+                         G_PARAM_CONSTRUCT_ONLY |
+                         G_PARAM_STATIC_NICK);
+
   g_object_class_install_properties(gobject_class,
                                     PROP_GP_LAST,
                                     gp_props);
+}
+
+static guint
+gp_merge_free_rects_pass(GGuillotinePacker *gp)
+{
+  guint i, k;
+  guint merged = 0;
+
+  for (i = 0; i < gp->rects_free->len; i++)
+    {
+      GRect *f = &g_array_index(gp->rects_free, GRect, i);
+
+      for (k = i + 1; k < gp->rects_free->len; k++)
+        {
+          GRect *b = &g_array_index(gp->rects_free, GRect, k);
+          GRect u;
+
+          if (!g_rect_merge(f, b, &u))
+            continue;
+
+          *f = u;
+          g_array_remove_index_fast(gp->rects_free, k);
+          merged += 1;
+          k--; /* we removed k, and replaced it, so check again */
+        }
+    }
+
+  return merged;
 }
 
 gboolean
@@ -523,6 +580,12 @@ g_guillotine_packer_insert(GGuillotinePacker *gp,
 
       if (g_rect_area_nonzero(&rl))
         g_array_append_val(gp->rects_free, rl);
+
+      if (gp->merge_free)
+        {
+          guint merged = gp_merge_free_rects_pass(gp);
+          g_debug("GP: merged %u free rects", merged);
+        }
 
       g_array_append_val(base->rects, inserted);
       g_array_append_val(out, inserted);
