@@ -11,7 +11,7 @@ pango    = dependency('pango')
 pc       = dependency('pangocairo')
 gtk4     = dependency('gtk+-4.0')
 
-alldep = [cairo, glib, gtk4, glfw3, graphene, pango, pc, vulkan]
+alldep = [cairo, glib, gtk4, glfw3, graphene, pango, vulkan, pc]
 
 c_flags   = ['-Wall', '-Wunreachable-code']
 ld_flags  = []
