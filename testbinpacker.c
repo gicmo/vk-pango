@@ -225,6 +225,7 @@ test_font_basic (Fixture       *fixture,
   packer = g_object_new(G_TYPE_GUILLOTINE_PACKER,
                         "width", 256,
                         "height", 256,
+                        "merge-free", TRUE,
                         NULL);
 
   cr = cairo_create(surface);
@@ -304,11 +305,13 @@ test_font_basic (Fixture       *fixture,
   } while (pango_layout_iter_next_run(li));
 
   packed = g_guillotine_packer_insert(packer, bins);
-  g_print("Packing done [%d]\n", packed->len);
-
   g_object_get(packer,
                "free-rects", &rfree,
                NULL);
+
+  g_print("Packing done [%u bins packed, %u free rects]\n",
+          packed->len, rfree->len);
+
 
   for (i = 0; i < rfree->len; i++)
     {
@@ -319,11 +322,12 @@ test_font_basic (Fixture       *fixture,
               gr->x, gr->y,
               gr->width, gr->height);
 
-      cairo_set_line_width(cr, 1);
+      cairo_set_line_width(cr, .5);
       cairo_set_source_rgba(cr, 0.0, 0.0, 1.0, 0.1);
       cairo_rectangle(cr, gr->x, gr->y, gr->width, gr->height);
-      cairo_stroke_preserve(cr);
-      cairo_fill(cr);
+      cairo_fill_preserve(cr);
+      cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, 0.1);
+      cairo_stroke(cr);
     }
 
 
