@@ -168,22 +168,47 @@ g_rect_can_fit (const GRect *outter,
          outter->width  >= inner->width;
 }
 
+#define G_RECT_FIT_IS_BEST(m) ((m & 1) == 0)
 gint
 g_rect_fit (const GRect *o,
 	    const GRect *i,
 	    GRectFit     method)
 {
+  gint score;
   switch (method)
     {
 
     case G_RECT_FIT_AREA_BEST:
-      return g_rect_area(o) - g_rect_area(i);
-
+      /* intentional fall-through */
     case G_RECT_FIT_AREA_WORST:
-      return -1 * (g_rect_area(o) - g_rect_area(i));
+      score = g_rect_area(o) - g_rect_area(i);
+      break;
+
+    case G_RECT_FIT_SHORT_SIDE_BEST:
+      /* intentional fall-through */
+    case G_RECT_FIT_LONG_SIDE_BEST:
+      /* intentional fall-through */
+    case G_RECT_FIT_LONG_SIDE_WORST:
+      /* intentional fall-through */
+    case G_RECT_FIT_SHORT_SIDE_WORST:
+      {
+        /* TODO: test me */
+        const int h = ABS((int) o->width  - i->width);
+	const int v = ABS((int) o->height - i->height);
+
+        /* for best, it is 'min', for worst 'max' */
+        if (G_RECT_FIT_IS_BEST(method))
+          score = MIN(h, v);
+        else
+          score = MAX(h, v);
+      }
+
     }
 
-  return G_MAXINT;
+  if (!G_RECT_FIT_IS_BEST(method))
+    score *= -1;
+
+  return score;
 }
 
 

@@ -53,14 +53,14 @@ void             g_rect_guillotine   (const GRect *origin,
 				      GRectSplit   method);
 
 typedef enum _GRectFit {
-  G_RECT_FIT_AREA_BEST,
-  G_RECT_FIT_AREA_WORST,
+  G_RECT_FIT_AREA_BEST  = 0,
+  G_RECT_FIT_AREA_WORST = 1,
 
-  //G_RECT_FIT_SHORT_SIDE_BEST,
-  //G_RECT_FIT_SHORT_SIDE_WORST,
+  G_RECT_FIT_SHORT_SIDE_BEST  = 2,
+  G_RECT_FIT_SHORT_SIDE_WORST = 3,
 
-  //G_RECT_FIT_LONG_SIDE_BEST,
-  //G_RECT_FIT_LONG_SIDE_WORST
+  G_RECT_FIT_LONG_SIDE_BEST  = 4,
+  G_RECT_FIT_LONG_SIDE_WORST = 5
 
 } GRectFit;
 
@@ -90,20 +90,6 @@ gfloat g_bin_packer_occupancy(GBinPacker *packer);
 
 
 /* ************************************************************************** */
-
-typedef enum _GGuillotinePackerFit {
-  GGP_FIT_AREA_BEST,
-  GGP_FIT_AREA_WORST,
-
-  GGP_FIT_SHORT_SIDE_BEST,
-  GGP_FIT_SHORT_SIDE_WORST,
-
-  GGP_FIT_LONG_SIDE_BEST,
-  GGP_FIT_LONG_SIDE_WORST
-
-} GGuillotinePackerFit;
-
-
 
 #define G_TYPE_GUILLOTINE_PACKER g_guillotine_packer_get_type()
 G_DECLARE_FINAL_TYPE(GGuillotinePacker, g_guillotine_packer, G, GUILLOTINE_PACKER, GBinPacker);
