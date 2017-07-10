@@ -69,6 +69,129 @@ test_rect_basic (Fixture       *fixture,
   g_assert_cmpuint(g_rect_area(&a), ==, sum);
 }
 
+static void
+test_rect_merge (Fixture       *fixture,
+		 gconstpointer  user_data)
+{
+  GRect a, b, u = {0, } ;
+
+  a.x = a.y = 0;
+
+  b.x = a.width + 10;
+  b.y = a.height + 10;
+
+  a.height = a.width = b.height = b.width = 10;
+
+  /* same size, but not overlapping or sharing a border */
+  g_assert_false(g_rect_merge(&a, &b, &u));
+
+  /* move b on the x axis to the end of a,
+     still not merge-able due to y offset */
+  b.x = a.width;
+  g_assert_false(g_rect_merge(&a, &b, &u));
+
+  /* now they share a border and can be merged  */
+  b.y = a.y;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, b.y);
+  g_assert_cmpuint(u.height, ==, a.height);
+  g_assert_cmpuint(u.width, ==, b.x + b.width - u.x);
+
+  /* now lets make them overlap */
+  b.x -= 3;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, b.y);
+  g_assert_cmpuint(u.height, ==, a.height);
+  g_assert_cmpuint(u.width, ==, b.x + b.width - u.x);
+
+  a.x += 3;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, b.y);
+  g_assert_cmpuint(u.height, ==, a.height);
+  g_assert_cmpuint(u.width, ==, b.x + b.width - u.x);
+
+  /* move a right of b */
+  a.x = b.x + 5;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, b.x);  /* changed */
+  g_assert_cmpuint(u.y, ==, b.y);
+  g_assert_cmpuint(u.height, ==, a.height);  /* changed */
+  g_assert_cmpuint(u.width, ==, a.x + a.width - u.x);  /* changed */
+
+  /* the same spiel for the other axis */
+  a.y = 10;
+  a.x = 10;
+  b.x = a.width + 10;
+  b.y = a.height + 10;
+
+  a.height = a.width = b.height = b.width = 15;
+  g_assert_false(g_rect_merge(&a, &b, &u));
+
+  b.y = a.height;
+  g_assert_false(g_rect_merge(&a, &b, &u));
+
+  b.x = a.x;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, a.y);
+  g_assert_cmpuint(u.height, ==, b.y + b.height - u.y);
+  g_assert_cmpuint(u.width, ==, b.width);
+
+  /* now lets make them overlap */
+  b.y -= 3;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, a.y);
+  g_assert_cmpuint(u.height, ==, b.y + b.height - u.y);
+  g_assert_cmpuint(u.width, ==, b.width);
+
+  a.y -= 2;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, a.y);
+  g_assert_cmpuint(u.height, ==, b.y + b.height - u.y);
+  g_assert_cmpuint(u.width, ==, b.width);
+
+  a.y = b.y + 5;
+  g_assert_true(g_rect_merge(&a, &b, &u));
+
+  g_assert_cmpuint(u.x, ==, a.x);
+  g_assert_cmpuint(u.y, ==, b.y); /* changed */
+  g_assert_cmpuint(u.height, ==, a.y + a.height - u.y); /* changed */
+  g_assert_cmpuint(u.width, ==, b.width);
+
+  /* let's do some known values,
+     same y (50), needs same height (206),
+     merge width of bordering rects
+  */
+
+  a.y = b.y = 50;
+  a.height = b.height = 206;
+
+  a.x = 135;
+  a.width = 3;
+
+  b.x = 138;
+  b.width = 9;
+
+  g_assert_true(g_rect_merge(&a, &b, &u));
+  g_assert_cmpuint(u.x, ==, 135);
+  g_assert_cmpuint(u.y, ==, 50);
+  g_assert_cmpuint(u.height, ==, 206);
+  g_assert_cmpuint(u.width, ==, 12); /* merged */
+
+}
+
 typedef struct GlyphInfo {
   PangoGlyph      glyph;
   PangoFont      *font;
@@ -266,11 +389,18 @@ main (int argc, char **argv)
 	     test_rect_basic,
 	     fixture_tear_down);
 
-  g_test_add("/bin-packer/font-basic",
+  g_test_add("/bin-packer/rect/merge",
 	     Fixture, NULL,
 	     fixture_set_up,
-	     test_font_basic,
+	     test_rect_merge,
 	     fixture_tear_down);
+
+
+  g_test_add("/bin-packer/font-basic",
+             Fixture, NULL,
+             fixture_set_up,
+             test_font_basic,
+             fixture_tear_down);
 
   return g_test_run();
 }

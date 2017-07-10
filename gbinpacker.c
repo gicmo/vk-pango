@@ -36,6 +36,12 @@ g_rect_contains_point(const GRect *r,
   return FALSE;
 }
 
+
+/* check if the point p is contained in the
+   segment that starts at s with length l */
+#define SEGMENT_CONTAINS(s, l, p)          \
+  (p >= s && p <= s + l)
+
 gboolean
 g_rect_intersect (const GRect *a,
                   const GRect *b,
@@ -45,6 +51,38 @@ g_rect_intersect (const GRect *a,
   guint64 aye = a->y + a->height;
   guint64 bxe = b->x + b->width;
   guint64 bye = b->y + b->height;
+  return FALSE;
+}
+
+gboolean
+g_rect_merge (const GRect *a,
+              const GRect *b,
+              GRect       *u)
+{
+  if (a->height == b->height && a->y == b->y &&
+      (SEGMENT_CONTAINS(a->x, a->width, b->x) ||
+       SEGMENT_CONTAINS(b->x, b->width, a->x)))
+    {
+
+      u->y      = a->y;
+      u->height = a->height;
+      u->x      = MIN(a->x, b->x);
+      u->width  = MAX(a->x + a->width, b->x + b->width) - u->x;
+
+      return TRUE;
+    }
+  else if ((a->width == b->width && a->x == b->x) &&
+           (SEGMENT_CONTAINS(a->y, a->height, b->y) ||
+            SEGMENT_CONTAINS(b->y, b->height, a->y)))
+    {
+
+      u->x      = a->x;
+      u->width  = a->width;
+      u->y      = MIN(a->y, b->y);
+      u->height = MAX(a->y + a->height, b->y + b->height) - u->y;
+
+      return TRUE;
+    }
 
   return FALSE;
 }
