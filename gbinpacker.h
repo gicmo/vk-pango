@@ -99,7 +99,7 @@ GArray *  g_guillotine_packer_insert   (GGuillotinePacker *gp,
 					GArray            *bins);
 gboolean  g_guillotine_packer_pack     (GGuillotinePacker *gp,
 					const GRect       *r);
-
+GArray *  g_guillotine_packer_check    (GGuillotinePacker *gp);
 /* ************************************************************************** */
 
 G_END_DECLS

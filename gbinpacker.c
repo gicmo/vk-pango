@@ -653,3 +653,44 @@ g_guillotine_packer_insert(GGuillotinePacker *gp,
 
   return out;
 }
+
+
+GArray *
+g_guillotine_packer_check(GGuillotinePacker *gp)
+{
+  GBinPackerPrivate *base = BP_GET_PRIV(gp);
+  const guint n_free = gp->rects_free->len;
+  const guint n_used = base->rects->len;
+  const guint n = n_free + n_used;
+  GArray *bad = NULL;
+  GArray *all;
+  guint  i;
+
+  all = g_array_sized_new(FALSE, FALSE, sizeof(GRect), n);
+
+  g_array_append_vals(all, gp->rects_free->data, n_free);
+  g_array_append_vals(all, base->rects->data, n_used);
+
+  for (i = 0; i < n; i++)
+    {
+      const GRect *a = &g_array_index(all, GRect, i);
+      guint k;
+
+      for (k = i + 1; k < n; k++)
+        {
+          const GRect *b = &g_array_index(all, GRect, k);
+          GRect o = {0, };
+
+          if (!g_rect_intersect(a, b, &o))
+            continue;
+
+          if (bad == NULL)
+            bad = g_array_sized_new(FALSE, FALSE, sizeof(GRect), 1);
+
+          g_array_append_val(bad, o);
+          /* we keep going to find all errors */
+        }
+    }
+
+  return bad;
+}
