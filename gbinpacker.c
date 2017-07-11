@@ -410,6 +410,8 @@ enum {
   PROP_GP_0,
   PROP_GP_FREE_RECTS,
   PROP_GP_MERGE_FREE,
+  PROP_GP_FIT_METHOD,
+  PROP_GP_SPLIT_METHOD,
   PROP_GP_LAST
 };
 static GParamSpec *gp_props[PROP_GP_LAST] = { NULL, };
@@ -442,6 +444,14 @@ g_guillotine_packer_get_property(GObject    *object,
   case PROP_GP_MERGE_FREE:
     g_value_set_boolean(value, gp->merge_free);
     break;
+
+  case PROP_GP_FIT_METHOD:
+    g_value_set_uint(value, gp->fit_method);
+    break;
+
+  case PROP_GP_SPLIT_METHOD:
+    g_value_set_uint(value, gp->split_method);
+    break;
   }
 }
 
@@ -457,6 +467,14 @@ g_guillotine_packer_set_property(GObject      *object,
   switch (prop_id) {
   case PROP_GP_MERGE_FREE:
      gp->merge_free = g_value_get_boolean(value);
+    break;
+
+  case PROP_GP_FIT_METHOD:
+    gp->fit_method = g_value_get_uint(value);
+    break;
+
+  case PROP_GP_SPLIT_METHOD:
+    gp->split_method = g_value_get_uint(value);
     break;
   }
 }
@@ -483,13 +501,7 @@ g_guillotine_packer_constructed(GObject *obj)
 static void
 g_guillotine_packer_init(GGuillotinePacker *gp)
 {
-  GBinPackerPrivate *priv = BP_GET_PRIV(gp);
-
   gp->rects_free = g_array_sized_new(FALSE, FALSE, sizeof(GRect), 1);
-
-  /* TODO: make this a property  */
-  gp->split_method = G_RECT_SPLIT_AREA_MAX;
-  gp->fit_method = G_RECT_FIT_AREA_BEST;
 }
 
 static void
@@ -514,6 +526,26 @@ g_guillotine_packer_class_init(GGuillotinePackerClass *klass)
                          G_PARAM_READWRITE |
                          G_PARAM_CONSTRUCT_ONLY |
                          G_PARAM_STATIC_NICK);
+
+  gp_props[PROP_GP_FIT_METHOD] =
+    g_param_spec_uint("fit-method",
+                      NULL, NULL,
+                      G_RECT_FIT_AREA_BEST,
+                      G_RECT_FIT_LONG_SIDE_WORST,
+                      G_RECT_FIT_SHORT_SIDE_BEST,
+                      G_PARAM_READWRITE |
+                      G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_NICK);
+
+    gp_props[PROP_GP_SPLIT_METHOD] =
+    g_param_spec_uint("split-method",
+                      NULL, NULL,
+                      G_RECT_SPLIT_AREA_MAX,
+                      G_RECT_SPLIT_AREA_MIN,
+                      G_RECT_SPLIT_AREA_MAX,
+                      G_PARAM_READWRITE |
+                      G_PARAM_CONSTRUCT_ONLY |
+                      G_PARAM_STATIC_NICK);
 
   g_object_class_install_properties(gobject_class,
                                     PROP_GP_LAST,
