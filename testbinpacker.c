@@ -317,7 +317,7 @@ test_font_basic (Fixture       *fixture,
     {
       GRect *gr = &g_array_index(rfree, GRect, i);
 
-      g_print("  %u: %d, %d, %d, %d\n",
+      g_print("  %u: %u, %u, %u, %d\n",
               i,
               gr->x, gr->y,
               gr->width, gr->height);
@@ -363,10 +363,30 @@ test_font_basic (Fixture       *fixture,
               info->ink.y);
 
       cairo_set_line_width(cr, 1);
-      cairo_set_source_rgba(cr, 1.0, 0.0, 0.0, 0.1);
+      cairo_set_source_rgba(cr, 0.0, 1.0, 0.0, 0.1);
       cairo_rectangle(cr, gr->x, gr->y, gr->width, gr->height);
       cairo_stroke_preserve(cr);
       cairo_fill(cr);
+    }
+
+  GArray *bad = g_guillotine_packer_check(packer);
+
+  if (bad)
+    {
+      g_print("consistency error: %d intersections\n", bad->len);
+    }
+
+  for (i = 0; bad && i < bad->len; i++)
+    {
+      GRect *r = &g_array_index(bad, GRect, i);
+
+      cairo_set_line_width(cr, .5);
+      cairo_set_source_rgba(cr, 1.0, 0.0, 0.0, 0.5);
+      cairo_rectangle(cr, r->x, r->y, r->width, r->height);
+      cairo_fill_preserve(cr);
+      cairo_set_source_rgba(cr, 1.0, 0.0, 0.0, 0.1);
+      cairo_stroke(cr);
+
     }
 
   cairo_destroy(cr);
