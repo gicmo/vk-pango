@@ -45,13 +45,37 @@ g_rect_contains_point(const GRect *r,
 gboolean
 g_rect_intersect (const GRect *a,
                   const GRect *b,
-                  GRect       *intersection)
+                  GRect       *i)
 {
-  guint64 axe = a->x + a->width;
-  guint64 aye = a->y + a->height;
-  guint64 bxe = b->x + b->width;
-  guint64 bye = b->y + b->height;
-  return FALSE;
+
+  int right, left;
+  int top, bottom;
+  gboolean intersect;
+
+  right  = MIN(a->x + a->width, b->x + b->width);
+  left   = MAX(a->x, b->x);
+
+  top    = MIN(a->y + a->height, b->y + b->height);
+  bottom = MAX(a->y, b->y);
+
+  intersect = top > bottom && right > left;
+
+  if (!i)
+    return intersect;
+
+  if (intersect)
+    {
+      i->x = left;
+      i->y = bottom;
+      i->width = right - left;
+      i->height = top - bottom;
+    }
+  else
+    {
+      memset(i, 0, sizeof(GRect));
+    }
+
+  return intersect;
 }
 
 gboolean
