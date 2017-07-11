@@ -230,8 +230,8 @@ g_rect_fit (const GRect *o,
         const int h = ABS((int) o->width  - i->width);
 	const int v = ABS((int) o->height - i->height);
 
-        /* for best, it is 'min', for worst 'max' */
-        if (G_RECT_FIT_IS_BEST(method))
+        if (method == G_RECT_FIT_SHORT_SIDE_BEST ||
+            method == G_RECT_FIT_SHORT_SIDE_WORST)
           score = MIN(h, v);
         else
           score = MAX(h, v);
