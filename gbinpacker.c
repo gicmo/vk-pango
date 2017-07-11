@@ -28,6 +28,15 @@ g_rect_size_equal (const GRect *a,
   return a->width == b->width && a->height == b->height;
 }
 
+gboolean
+g_rect_equal (const GRect *a,
+              const GRect *b)
+{
+  return a->x == b->x && a->y && b-> y &&
+         g_rect_size_equal(a, b);
+}
+
+
 static gboolean
 g_rect_contains_point(const GRect *r,
                       guint x,

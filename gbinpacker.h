@@ -27,7 +27,8 @@ void             g_rect_free         (GRect       *rect);
 
 gboolean         g_rect_size_equal   (const GRect *a,
 				      const GRect *b);
-
+gboolean         g_rect_equal        (const GRect *a,
+				      const GRect *b);
 gboolean         g_rect_area_nonzero (const GRect *rect);
 guint            g_rect_area         (const GRect *rect);
 
