@@ -214,6 +214,7 @@ g_rect_fit (const GRect *o,
     case G_RECT_FIT_AREA_BEST:
       /* intentional fall-through */
     case G_RECT_FIT_AREA_WORST:
+      /* assumes area(o) > area(i) */
       score = g_rect_area(o) - g_rect_area(i);
       break;
 
@@ -595,13 +596,15 @@ g_guillotine_packer_insert(GGuillotinePacker *gp,
 	    {
 	      b = &g_array_index(bins, GRect, k);
 
-	      if (g_rect_size_equal(b, f))
+	      if (g_rect_size_equal(f, b))
 		{
 		  pos = i;
 		  idx = k;
 		  score = G_MININT;
 
-		  i = gp->rects_free->len - 1;
+                  /* it cant get better, drop out of both loops */
+                  i = gp->rects_free->len;
+                  break;
 		}
 	      else if (g_rect_can_fit(f, b))
 		{
