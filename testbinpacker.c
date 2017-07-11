@@ -248,6 +248,7 @@ test_font_basic (Fixture       *fixture,
                         "AbCdEfGhIjKlMnOpQrStUvWxYz"
                         "aBcDeFgHiJkLmNoPqRsTuVwXyZ"
                         "ÄäÖöÜüß"
+                        "θαζχσωεδξωφρτγβνηψυςμκιολπάέήίϊΐόύϋΰώ"
                         "ŁĄŻĘĆŃŚŹ"
                         "ЯБГДЖЙ"
                         "ろぬふあうええおやゆよわほへたていすかんなにらぜ゜むちとしはきくまのりれけむつさそひこみもねるめ"
