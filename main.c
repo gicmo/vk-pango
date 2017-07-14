@@ -1318,7 +1318,7 @@ int main(int argc, char **argv)
   };
 
   res = vkCreatePipelineCache(dev, &pc_ci, NULL, &pipeline_cache);
-  if (pass == VK_NULL_HANDLE)
+  if (res != VK_SUCCESS)
     {
       g_print("[E] pipeline cache creation failed");
       return -1;
